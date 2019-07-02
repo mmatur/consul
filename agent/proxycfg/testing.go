@@ -10,6 +10,7 @@ import (
 	"github.com/hashicorp/consul/agent/cache"
 	cachetype "github.com/hashicorp/consul/agent/cache-types"
 	"github.com/hashicorp/consul/agent/connect"
+	"github.com/hashicorp/consul/agent/consul/discoverychain"
 	"github.com/hashicorp/consul/agent/structs"
 	"github.com/mitchellh/go-testing-interface"
 	"github.com/stretchr/testify/require"
@@ -148,6 +149,29 @@ func TestUpstreamNodes(t testing.T) structs.CheckServiceNodes {
 				ID:         "test2",
 				Node:       "test2",
 				Address:    "10.10.1.2",
+				Datacenter: "dc1",
+			},
+			Service: structs.TestNodeService(t),
+		},
+	}
+}
+
+func TestUpstreamNodesAlternate(t testing.T) structs.CheckServiceNodes {
+	return structs.CheckServiceNodes{
+		structs.CheckServiceNode{
+			Node: &structs.Node{
+				ID:         "alt-test1",
+				Node:       "alt-test1",
+				Address:    "10.20.1.1",
+				Datacenter: "dc1",
+			},
+			Service: structs.TestNodeService(t),
+		},
+		structs.CheckServiceNode{
+			Node: &structs.Node{
+				ID:         "alt-test2",
+				Node:       "alt-test2",
+				Address:    "10.20.1.2",
 				Datacenter: "dc1",
 			},
 			Service: structs.TestNodeService(t),
@@ -377,6 +401,111 @@ func TestConfigSnapshot(t testing.T) *ConfigSnapshot {
 		},
 		Datacenter: "dc1",
 	}
+}
+
+// TestConfigSnapshotDiscoveryChain returns a fully populated snapshot using a discovery chain
+func TestConfigSnapshotDiscoveryChain(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "simple")
+}
+
+func TestConfigSnapshotDiscoveryChainWithFailover(t testing.T) *ConfigSnapshot {
+	return testConfigSnapshotDiscoveryChain(t, "failover")
+}
+
+func testConfigSnapshotDiscoveryChain(t testing.T, variation string) *ConfigSnapshot {
+	roots, leaf := TestCerts(t)
+
+	// Compile a chain.
+	entries := structs.NewDiscoveryChainConfigEntries()
+	switch variation {
+	case "simple":
+		entries.AddResolvers(
+			&structs.ServiceResolverConfigEntry{
+				Kind:           structs.ServiceResolver,
+				Name:           "db",
+				ConnectTimeout: 33 * time.Second,
+			},
+		)
+	case "failover":
+		entries.AddResolvers(
+			&structs.ServiceResolverConfigEntry{
+				Kind:           structs.ServiceResolver,
+				Name:           "db",
+				ConnectTimeout: 33 * time.Second,
+				Failover: map[string]structs.ServiceResolverFailover{
+					"*": {
+						Service: "fail",
+					},
+				},
+			},
+		)
+	default:
+		t.Fatalf("unexpected variation: %q", variation)
+		return nil
+	}
+
+	dbChain, err := discoverychain.Compile(discoverychain.CompileRequest{
+		ServiceName:       "db",
+		CurrentNamespace:  "default",
+		CurrentDatacenter: "dc1",
+		InferDefaults:     true,
+		Entries:           entries,
+	})
+	require.NoError(t, err)
+
+	dbTarget := structs.DiscoveryTarget{
+		Service:    "db",
+		Namespace:  "default",
+		Datacenter: "dc1",
+	}
+	failTarget := structs.DiscoveryTarget{
+		Service:    "fail",
+		Namespace:  "default",
+		Datacenter: "dc1",
+	}
+
+	snap := &ConfigSnapshot{
+		Kind:    structs.ServiceKindConnectProxy,
+		Service: "web-sidecar-proxy",
+		ProxyID: "web-sidecar-proxy",
+		Address: "0.0.0.0",
+		Port:    9999,
+		Proxy: structs.ConnectProxyConfig{
+			DestinationServiceID:   "web",
+			DestinationServiceName: "web",
+			LocalServiceAddress:    "127.0.0.1",
+			LocalServicePort:       8080,
+			Config: map[string]interface{}{
+				"foo": "bar",
+			},
+			Upstreams: structs.TestUpstreams(t),
+		},
+		Roots: roots,
+		ConnectProxy: configSnapshotConnectProxy{
+			Leaf: leaf,
+			DiscoveryChain: map[string]*structs.CompiledDiscoveryChain{
+				"db": dbChain,
+			},
+			WatchedUpstreamEndpoints: map[string]map[structs.DiscoveryTarget]structs.CheckServiceNodes{
+				"db": map[structs.DiscoveryTarget]structs.CheckServiceNodes{
+					dbTarget: TestUpstreamNodes(t),
+				},
+			},
+		},
+		Datacenter: "dc1",
+	}
+
+	switch variation {
+	case "simple":
+	case "failover":
+		snap.ConnectProxy.WatchedUpstreamEndpoints["db"][failTarget] =
+			TestUpstreamNodesAlternate(t)
+	default:
+		t.Fatalf("unexpected variation: %q", variation)
+		return nil
+	}
+
+	return snap
 }
 
 func TestConfigSnapshotMeshGateway(t testing.T) *ConfigSnapshot {

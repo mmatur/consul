@@ -101,6 +101,16 @@ func TestClustersFromSnapshot(t *testing.T) {
 			},
 		},
 		{
+			name:   "connect-proxy-with-chain",
+			create: proxycfg.TestConfigSnapshotDiscoveryChain,
+			setup:  nil,
+		},
+		{
+			name:   "connect-proxy-with-chain-and-failover",
+			create: proxycfg.TestConfigSnapshotDiscoveryChainWithFailover,
+			setup:  nil,
+		},
+		{
 			name:   "mesh-gateway",
 			create: proxycfg.TestConfigSnapshotMeshGateway,
 			setup:  nil,

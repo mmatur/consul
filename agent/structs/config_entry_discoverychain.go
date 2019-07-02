@@ -845,6 +845,15 @@ type DiscoveryChainConfigEntries struct {
 	GlobalProxy *ProxyConfigEntry
 }
 
+func NewDiscoveryChainConfigEntries() *DiscoveryChainConfigEntries {
+	return &DiscoveryChainConfigEntries{
+		Routers:   make(map[string]*ServiceRouterConfigEntry),
+		Splitters: make(map[string]*ServiceSplitterConfigEntry),
+		Resolvers: make(map[string]*ServiceResolverConfigEntry),
+		Services:  make(map[string]*ServiceConfigEntry),
+	}
+}
+
 func (e *DiscoveryChainConfigEntries) GetRouter(name string) *ServiceRouterConfigEntry {
 	if e.Routers != nil {
 		return e.Routers[name]
