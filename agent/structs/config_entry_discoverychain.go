@@ -99,6 +99,8 @@ func (e *ServiceRouterConfigEntry) Validate() error {
 			return fmt.Errorf("Route[%d] should only contain at most one of PathExact, PathPrefix, or PathRegex", i)
 		}
 
+		// TODO(rb): do some validation of PathExact and PathPrefix
+
 		for j, hdr := range route.Match.HTTP.Header {
 			if hdr.Name == "" {
 				return fmt.Errorf("Route[%d] Header[%d] missing required Name field", i, j)
@@ -282,6 +284,10 @@ type ServiceRouteDestination struct {
 	// RetryOnStatusCodes is a flat list of http response status codes that are
 	// eligible for retry. This again should be feasible in any sane proxy.
 	RetryOnStatusCodes []uint32 `json:",omitempty"`
+}
+
+func (d *ServiceRouteDestination) HasRetryFeatures() bool {
+	return d.NumRetries > 0 || d.RetryOnConnectFailure || len(d.RetryOnStatusCodes) > 0
 }
 
 // ServiceSplitterConfigEntry defines how incoming requests are split across

@@ -79,10 +79,6 @@ func makeUpstreamRouteForDiscoveryChain(
 		for _, discoveryRoute := range chain.Node.Routes {
 			routeMatch := makeRouteMatchForDiscoveryRoute(discoveryRoute, chain.Protocol)
 
-			// TODO(rb): handle PrefixRewrite
-			// TODO(rb): handle RequestTimeout
-			// TODO(rb): handle Retries
-
 			var (
 				routeAction *envoyroute.Route_Route
 				err         error
@@ -101,6 +97,41 @@ func makeUpstreamRouteForDiscoveryChain(
 
 			} else {
 				return nil, fmt.Errorf("unexpected graph node after route %q", next.Type)
+			}
+
+			// TODO(rb): Better help handle the envoy case where you need (prefix=/foo/,rewrite=/) and (exact=/foo,rewrite=/) to do a full rewrite
+
+			destination := discoveryRoute.Definition.Destination
+			if destination != nil {
+				if destination.PrefixRewrite != "" {
+					routeAction.Route.PrefixRewrite = destination.PrefixRewrite
+				}
+
+				if destination.RequestTimeout > 0 {
+					routeAction.Route.Timeout = &destination.RequestTimeout
+				}
+
+				if destination.HasRetryFeatures() {
+					retryPolicy := &envoyroute.RetryPolicy{}
+					if destination.NumRetries > 0 {
+						retryPolicy.NumRetries = makeUint32Value(int(destination.NumRetries))
+					}
+
+					// The RetryOn magic values come from: https://www.envoyproxy.io/docs/envoy/v1.10.0/configuration/http_filters/router_filter#config-http-filters-router-x-envoy-retry-on
+					if destination.RetryOnConnectFailure {
+						retryPolicy.RetryOn = "connect-failure"
+					}
+					if len(destination.RetryOnStatusCodes) > 0 {
+						if retryPolicy.RetryOn != "" {
+							retryPolicy.RetryOn = ",retriable-status-codes"
+						} else {
+							retryPolicy.RetryOn = "retriable-status-codes"
+						}
+						retryPolicy.RetriableStatusCodes = destination.RetryOnStatusCodes
+					}
+
+					routeAction.Route.RetryPolicy = retryPolicy
+				}
 			}
 
 			routes = append(routes, envoyroute.Route{
