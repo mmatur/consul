@@ -3,14 +3,14 @@ layout: "docs"
 page_title: "Mesh Gateways - Kubernetes (beta)"
 sidebar_current: "docs-platform-k8s-mesh-gateways"
 description: |-
-    How to configure Connect Mesh Gateways in Kubernetes.
+    This documentation describes how to configure Connect Mesh Gateways in Kubernetes.
 ---
 
 # Mesh Gateways on Kubernetes <sup>(beta)</sup>
 
 
 Mesh gateways enable routing of Connect traffic between different Consul datacenters.
-See [Mesh Gateways](/docs/connect/mesh_gateways.html) for more details.
+See [Mesh Gateways](/docs/connect/mesh_gateway.html) for more details.
 
 To deploy Gateways in Kubernetes, use our [consul-helm](/docs/platform/k8s/helm.html) chart.
 
@@ -23,7 +23,7 @@ meshGateway:
   enabled: true
 ```
 
-See the [chart reference](/docs/platform/k8s/helm.html#v-meshgateway) for full documentation
+See the [chart reference](/docs/platform/k8s/helm.html) for full documentation
 on all the options.
 
 ## Architecture
